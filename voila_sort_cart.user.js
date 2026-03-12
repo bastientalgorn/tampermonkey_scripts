@@ -1,20 +1,10 @@
 // ==UserScript==
 // @name         Voila Product Categories
 // @namespace    http://tampermonkey.net/
-// @version      7.4
+// @version      7.5
 // @description  Displays product categories from __INITIAL_STATE__ under product names with auto-sorting
-// @match        https://*.voila.ca/orders*
-// @match        https://*.voila.ca/basket*
-// @match        https://voila.ca/orders*
-// @match        https://voila.ca/basket*
-// @match        http://*.voila.ca/orders*
-// @match        http://*.voila.ca/basket*
-// @match        http://voila.ca/orders*
-// @match        http://voila.ca/basket*
-// @exclude      https://*.voila.ca/checkout/checkout-walk/*
-// @exclude      https://voila.ca/checkout/checkout-walk/*
-// @exclude      http://*.voila.ca/checkout/checkout-walk/*
-// @exclude      http://voila.ca/checkout/checkout-walk/*
+// @match        *://*.voila.ca/*
+// @match        *://voila.ca/*
 // @run-at       document-end
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
@@ -506,9 +496,12 @@
      * Initialize the script on page load
      */
     function initialize() {
+        removePromotions();
+        
+        if (!shouldRunOnCurrentUrl()) return;
+        
         styleProductLinks();
         styleProductBorders();
-        removePromotions();
         addCategoriesToProducts();
         setTimeout(createSortButton, DELAYS.BUTTON_CREATE);
     }
@@ -517,9 +510,12 @@
      * Handle dynamic content updates
      */
     function handleDynamicUpdates() {
+        removePromotions();
+        
+        if (!shouldRunOnCurrentUrl()) return;
+        
         styleProductLinks();
         styleProductBorders();
-        removePromotions();
         addCategoriesToProducts();
     }
     
@@ -581,13 +577,20 @@
         if (shouldRunOnCurrentUrl()) {
             console.log('[Voila Script] Re-initializing script for new URL');
             resetScriptState();
-        } else if (sortButton) {
-            // Remove button if navigated away from target pages
-            console.log('[Voila Script] Removing button - not on target page');
-            if (sortButton.parentNode) {
+        } else {
+            // Clean up everything if navigated away from target pages
+            console.log('[Voila Script] Cleaning up - not on target page');
+            
+            if (sortButton && sortButton.parentNode) {
                 sortButton.parentNode.removeChild(sortButton);
             }
             sortButton = null;
+            autoSortTriggered = false;
+            totalItems = 0;
+            readyItems = 0;
+            
+            const oldCategories = document.querySelectorAll(SELECTORS.CATEGORY_TEXT);
+            oldCategories.forEach(cat => cat.remove());
         }
     }
     
