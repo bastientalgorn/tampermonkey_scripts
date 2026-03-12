@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Voila Product Categories
 // @namespace    http://tampermonkey.net/
-// @version      7.5
+// @version      7.6
 // @description  Displays product categories from __INITIAL_STATE__ under product names with auto-sorting
 // @match        *://*.voila.ca/*
 // @match        *://voila.ca/*
@@ -27,7 +27,8 @@
         PROMOTION_CONTAINER: '.promotion-container[data-retailer-anchor="fop-promotions"]',
         PRODUCT_WRAPPER: '[data-test^="fop-wrapper:"]',
         CATEGORY_TEXT: '.custom-category-text',
-        INITIAL_STATE_SCRIPT: 'script[data-test="initial-state-script"]'
+        INITIAL_STATE_SCRIPT: 'script[data-test="initial-state-script"]',
+        POP_UP_BANNER: '[data-test="pop-up-banner"]'
     };
     
     // Colors for category sources
@@ -66,6 +67,7 @@
     let autoSortTriggered = false;
     let totalItems = 0;
     let readyItems = 0;
+    let unsavedCacheCount = 0;
     const categoryCache = loadCache();
 
     // ============================================================================
@@ -91,8 +93,11 @@
      * @param {Object} cache - Cache object to save
      */
     function saveCache(cache) {
+        if (unsavedCacheCount === 0) return;
+        
         try {
             GM_setValue(CACHE_KEY, JSON.stringify(cache));
+            unsavedCacheCount = 0;
         } catch (e) {
             console.error('Failed to save cache:', e);
         }
@@ -227,7 +232,10 @@
             fetchCategoryFromProductPage(productUrl, function(result) {
                 if (result.success) {
                     categoryCache[productName] = result.category;
-                    saveCache(categoryCache);
+                    unsavedCacheCount++;
+                    if (unsavedCacheCount > 20) {
+                        saveCache(categoryCache);
+                    }
                     resolve({ category: result.category, source: 'fetched' });
                 } else {
                     const source = result.error === 'no category found' ? 'not_found' : 'error';
@@ -276,6 +284,14 @@
     function removePromotions() {
         const promotionContainers = document.querySelectorAll(SELECTORS.PROMOTION_CONTAINER);
         promotionContainers.forEach(container => container.remove());
+    }
+    
+    /**
+     * Remove pop-up banner overlays
+     */
+    function removePopUpBanner() {
+        const banners = document.querySelectorAll(SELECTORS.POP_UP_BANNER);
+        banners.forEach(banner => banner.remove());
     }
     
     /**
@@ -415,6 +431,11 @@
             autoSortTriggered = true;
             console.log(`Auto-sorting: all ${totalItems} items ready`);
             
+            // Flush any unsaved cache entries before sorting
+            if (unsavedCacheCount > 0) {
+                saveCache(categoryCache);
+            }
+            
             setTimeout(() => {
                 sortCartItems();
                 setTimeout(() => {
@@ -497,6 +518,7 @@
      */
     function initialize() {
         removePromotions();
+        removePopUpBanner();
         
         if (!shouldRunOnCurrentUrl()) return;
         
@@ -511,6 +533,7 @@
      */
     function handleDynamicUpdates() {
         removePromotions();
+        removePopUpBanner();
         
         if (!shouldRunOnCurrentUrl()) return;
         
